@@ -46,6 +46,18 @@ class Database:
             )
         ''')
 
+        # analytics table for speed :)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS analytics_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                metric_name TEXT NOT NULL,
+                metric_value TEXT,
+                date_range TEXT,
+                calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_analytics_metric ON analytics_cache(metric_name, date_range)')
+
     def _row_to_dict(self, row):
         '''Convert an sqlite row to a dict'''
         return dict(zip(row.keys(), row)) if row else None
@@ -72,3 +84,71 @@ class Database:
         )
         row = self.cursor.fetchone()
         return self._row_to_dict(row)
+    
+    def get_entry_by_date(self, entry_date: str) -> Optional[Dict]:
+        '''Retrieve a jrnscore entry from a given date'''
+        self.cursor.execute('SELECT * FROM entries WHERE entry_date = ?', (entry_date,))
+        return self._row_to_dict(self.cursor.fetchone())
+
+    def get_latest_entry_number(self) -> int:
+        '''Get the highest entry number, or 0 if no entries'''
+        self.cursor.execute('SELECT MAX(entry_number) as max_num FROM entries')
+        result = self.cursor.fetchone()
+        return result['max_num'] if result['max_num'] else 0
+
+    def list_entries(self, limit: int = 50, offset: int = 0, 
+                    start_date: Optional[str] = None,
+                    end_date: Optional[str] = None) -> List[Dict]:
+        '''List entries with optional date filtering'''
+        query = 'SELECT * FROM entries WHERE 1=1'
+        params = []
+
+        if start_date:
+            query += ' AND entry_date >= ?'
+            params.append(start_date)
+        if end_date:
+            query += ' AND entry_date <= ?'
+            params.append(end_date)
+
+        query += ' ORDER BY entry_date DESC LIMIT ? OFFSET ?'
+        params.extend([limit, offset])
+
+        self.cursor.execute(query, params)
+        return [self._row_to_dict(r) for r in self.cursor.fetchall()]
+
+    def update_entry(self, entry_id: int, score: Optional[int] = None, 
+                    energy: Optional[int] = None, mood: Optional[int] = None,
+                    completed_on_time: Optional[bool] = None,
+                    extra_notes: Optional[str] = None) -> bool:
+        '''Update an existing entry'''
+        updates = []
+        params = []
+
+        if score is not None:
+            updates.append('score = ?')
+            params.append(score)
+        if energy is not None:
+            updates.append('energy = ?')
+            params.append(energy)
+        if mood is not None:
+            updates.append('mood = ?')
+            params.append(mood)
+        if completed_on_time is not None:
+            updates.append('completed_on_time = ?')
+            params.append(completed_on_time)
+        if extra_notes is not None:
+            updates.append('extra_notes = ?')
+            params.append(extra_notes)
+
+        if updates:
+            updates.append('updated_at = CURRENT_TIMESTAMP')
+            query = f"UPDATE entries SET {', '.join(updates)} WHERE id = ?"
+            params.append(entry_id)
+            self.cursor.execute(query, params)
+
+        return True
+
+    def delete_entry(self, entry_id: int) -> bool:
+        '''Delete an entry'''
+        self.cursor.execute('DELETE FROM entries WHERE id = ?', (entry_id,))
+        return True
