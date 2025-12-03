@@ -45,6 +45,10 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+    def _row_to_dict(self, row):
+        '''Convert an sqlite row to a dict'''
+        return dict(zip(row.keys(), row)) if row else None
         
     def create_entry(self, entry_number: int, entry_date: str, 
                      score: Optional[int] = None, energy: Optional[int] = None,
@@ -67,4 +71,4 @@ class Database:
             (entry_date,)
         )
         row = self.cursor.fetchone()
-        return dict(zip(row.keys(), row)) if row else None
+        return self._row_to_dict(row)
