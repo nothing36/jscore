@@ -152,3 +152,6 @@ class Database:
         '''Delete an entry'''
         self.cursor.execute('DELETE FROM entries WHERE id = ?', (entry_id,))
         return True
+    
+if __name__ == '__main__':
+    Database.init_db()
